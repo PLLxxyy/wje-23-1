@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import api from '@/utils/api'
 import { CUISINE_OPTIONS } from '@/utils/format'
 import { Plus, Trash2, ChefHat } from 'lucide-react'
@@ -16,6 +16,8 @@ interface StepInput {
 
 export default function AddRecipe() {
   const navigate = useNavigate()
+  const { id } = useParams()
+  const isEdit = !!id
   const [title, setTitle] = useState('')
   const [cuisine, setCuisine] = useState('家常菜')
   const [difficulty, setDifficulty] = useState('easy')
@@ -25,6 +27,38 @@ export default function AddRecipe() {
   const [ingredients, setIngredients] = useState<IngredientInput[]>([{ name: '', amount: '' }])
   const [steps, setSteps] = useState<StepInput[]>([{ content: '' }])
   const [submitting, setSubmitting] = useState(false)
+  const [loading, setLoading] = useState(isEdit)
+
+  useEffect(() => {
+    if (isEdit) {
+      const fetchRecipe = async () => {
+        try {
+          const [recipeRes, ingRes, stepRes] = await Promise.all([
+            api.get(`/recipes/${id}`),
+            api.get(`/recipes/${id}/ingredients`),
+            api.get(`/recipes/${id}/steps`)
+          ])
+          const recipe = recipeRes.data
+          setTitle(recipe.title)
+          setCuisine(recipe.cuisine)
+          setDifficulty(recipe.difficulty)
+          setCookTime(String(recipe.cookTime))
+          setPhoto(recipe.photo || '')
+          setDescription(recipe.description || '')
+          setIngredients(ingRes.data.length > 0
+            ? ingRes.data.map((i: any) => ({ name: i.name, amount: i.amount }))
+            : [{ name: '', amount: '' }])
+          setSteps(stepRes.data.length > 0
+            ? stepRes.data.sort((a: any, b: any) => a.orderNum - b.orderNum)
+              .map((s: any) => ({ content: s.content, photo: s.photo }))
+            : [{ content: '' }])
+        } finally {
+          setLoading(false)
+        }
+      }
+      fetchRecipe()
+    }
+  }, [id, isEdit])
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -62,7 +96,7 @@ export default function AddRecipe() {
     e.preventDefault()
     setSubmitting(true)
     try {
-      const res = await api.post('/recipes', {
+      const payload = {
         title,
         cuisine,
         difficulty,
@@ -71,18 +105,23 @@ export default function AddRecipe() {
         description,
         ingredients: ingredients.filter(i => i.name),
         steps: steps.filter(s => s.content)
-      })
+      }
+      const res = isEdit
+        ? await api.put(`/recipes/${id}`, payload)
+        : await api.post('/recipes', payload)
       navigate(`/recipes/${res.data.id}`)
     } finally {
       setSubmitting(false)
     }
   }
 
+  if (loading) return <div className="text-center py-20 text-gray-500">加载中...</div>
+
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
         <ChefHat className="w-6 h-6 text-orange-500" />
-        发布菜谱
+        {isEdit ? '编辑菜谱' : '发布菜谱'}
       </h1>
 
       <form onSubmit={handleSubmit} className="bg-white rounded-lg border border-gray-200 p-6 space-y-6">
@@ -128,7 +167,6 @@ export default function AddRecipe() {
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent" />
         </div>
 
-        {/* Ingredients */}
         <div>
           <div className="flex items-center justify-between mb-3">
             <label className="text-sm font-medium text-gray-700">食材清单</label>
@@ -155,7 +193,6 @@ export default function AddRecipe() {
           </div>
         </div>
 
-        {/* Steps */}
         <div>
           <div className="flex items-center justify-between mb-3">
             <label className="text-sm font-medium text-gray-700">烹饪步骤</label>
@@ -188,13 +225,13 @@ export default function AddRecipe() {
         </div>
 
         <div className="flex gap-3 justify-end">
-          <button type="button" onClick={() => navigate('/')}
+          <button type="button" onClick={() => navigate(isEdit ? `/recipes/${id}` : '/')}
             className="px-4 py-2 text-sm text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
             取消
           </button>
           <button type="submit" disabled={submitting}
             className="px-4 py-2 text-sm text-white bg-orange-500 rounded-lg hover:bg-orange-600 disabled:bg-gray-300 transition-colors">
-            {submitting ? '发布中...' : '发布菜谱'}
+            {submitting ? '保存中...' : isEdit ? '保存修改' : '发布菜谱'}
           </button>
         </div>
       </form>

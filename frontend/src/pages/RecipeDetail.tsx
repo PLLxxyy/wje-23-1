@@ -4,11 +4,13 @@ import api from '@/utils/api'
 import StarRating from '@/components/StarRating'
 import DifficultyBadge from '@/components/DifficultyBadge'
 import { Recipe, Ingredient, Step, Review } from '@/types'
-import { ArrowLeft, Clock, Heart, ShoppingCart, ChefHat, Star, User } from 'lucide-react'
+import { useAuth } from '@/hooks/useAuth'
+import { ArrowLeft, Clock, Heart, ShoppingCart, ChefHat, Star, User, Edit } from 'lucide-react'
 
 export default function RecipeDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [recipe, setRecipe] = useState<Recipe | null>(null)
   const [ingredients, setIngredients] = useState<Ingredient[]>([])
   const [steps, setSteps] = useState<Step[]>([])
@@ -85,6 +87,15 @@ export default function RecipeDetail() {
           <h1 className="text-2xl font-bold text-gray-800">{recipe.title}</h1>
         </div>
         <div className="flex items-center gap-2">
+          {user && recipe && user.id === recipe.userId && (
+            <button
+              onClick={() => navigate(`/recipes/${id}/edit`)}
+              className="flex items-center gap-2 px-4 py-2 text-sm bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
+            >
+              <Edit className="w-4 h-4" />
+              编辑
+            </button>
+          )}
           <button
             onClick={handleFavorite}
             className={`flex items-center gap-2 px-4 py-2 text-sm rounded-lg transition-colors ${

@@ -214,4 +214,53 @@ router.delete('/:id/favorite', authMiddleware, (req: any, res) => {
   res.json({ success: true })
 })
 
+router.put('/:id', authMiddleware, (req: any, res) => {
+  const recipeId = req.params.id
+  const { title, cuisine, difficulty, cookTime, photo, description, ingredients, steps } = req.body
+
+  const recipe: any = db.prepare('SELECT * FROM recipes WHERE id = ?').get(recipeId)
+  if (!recipe) return res.status(404).json({ error: '菜谱不存在' })
+  if (recipe.user_id !== req.userId) return res.status(403).json({ error: '无权限编辑' })
+
+  if (!title || !cuisine || !difficulty || !cookTime) {
+    return res.status(400).json({ error: '请填写必填项' })
+  }
+
+  const stmt = db.prepare(`
+    UPDATE recipes
+    SET title = ?, cuisine = ?, difficulty = ?, cook_time = ?, photo = ?, description = ?
+    WHERE id = ?
+  `)
+  stmt.run(title, cuisine, difficulty, cookTime, photo || null, description || null, recipeId)
+
+  db.prepare('DELETE FROM ingredients WHERE recipe_id = ?').run(recipeId)
+  if (ingredients && ingredients.length > 0) {
+    const ingStmt = db.prepare('INSERT INTO ingredients (recipe_id, name, amount, order_num) VALUES (?, ?, ?, ?)')
+    ingredients.forEach((ing: any, index: number) => {
+      ingStmt.run(recipeId, ing.name, ing.amount, index)
+    })
+  }
+
+  db.prepare('DELETE FROM steps WHERE recipe_id = ?').run(recipeId)
+  if (steps && steps.length > 0) {
+    const stepStmt = db.prepare('INSERT INTO steps (recipe_id, order_num, content, photo) VALUES (?, ?, ?, ?)')
+    steps.forEach((step: any, index: number) => {
+      stepStmt.run(recipeId, index + 1, step.content, step.photo || null)
+    })
+  }
+
+  const updatedRecipe: any = db.prepare('SELECT * FROM recipes WHERE id = ?').get(recipeId)
+  res.json({
+    id: updatedRecipe.id,
+    userId: updatedRecipe.user_id,
+    title: updatedRecipe.title,
+    cuisine: updatedRecipe.cuisine,
+    difficulty: updatedRecipe.difficulty,
+    cookTime: updatedRecipe.cook_time,
+    photo: updatedRecipe.photo,
+    description: updatedRecipe.description,
+    createdAt: updatedRecipe.created_at
+  })
+})
+
 export default router
